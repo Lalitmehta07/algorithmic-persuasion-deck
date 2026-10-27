@@ -30,6 +30,8 @@
   --glass-border:rgba(255,255,255,0.85);
   --glass-shadow:0 20px 50px rgba(15,23,42,0.06);
   --glass-blur:blur(18px) saturate(160%);
+  /* Apple-grade specular sheen for glass surfaces (static — never animated) */
+  --apple-sheen:linear-gradient(142deg,rgba(255,255,255,0.92) 0%,rgba(255,255,255,0.30) 22%,rgba(255,255,255,0.06) 46%,rgba(255,255,255,0.02) 70%,rgba(255,255,255,0.22) 100%);
   --neu-bg:#EEF2F9;
   --neu-out:6px 6px 14px rgba(166,180,200,0.55), -6px -6px 14px rgba(255,255,255,0.95);
   --neu-out-sm:4px 4px 10px rgba(166,180,200,0.5), -4px -4px 10px rgba(255,255,255,0.92);
@@ -59,12 +61,18 @@ button{font-family:inherit;border:none;background:none;cursor:pointer;color:inhe
 i[data-lucide]{display:inline-flex;}
 ::selection{background:rgba(37,99,235,0.18);color:var(--ink-h);}
 
-/* ---------- Generative SVG field (fixed, behind everything) ---------- */
-#field-wrap{
-  position:fixed;inset:0;z-index:0;pointer-events:none;
+/* ---------- Generative SVG field — now hosted INSIDE the slide stage.
+   One independent vector layer per slide (10 themes), clipped by the stage. ---------- */
+.slide-field{
+  position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;
+  border-radius:inherit;
+  opacity:0;transition:opacity 0.45s ease;
   backface-visibility:hidden;transform:translateZ(0);
 }
-#phase-field{width:100%;height:100%;display:block;}
+.slide.is-active .slide-field{opacity:1;}
+.slide-field svg{width:100%;height:100%;display:block;}
+.slide > *:not(.slide-field){position:relative;z-index:1;}
+.slide > .clickzone{z-index:40;}
 
 /* ---------- Glassmorphic main stage (single static backdrop-filter) ---------- */
 #stage{
@@ -81,6 +89,15 @@ i[data-lucide]{display:inline-flex;}
   box-shadow:var(--glass-shadow),0 2px 6px rgba(15,23,42,0.04);
   overflow:hidden;
   backface-visibility:hidden;
+}
+/* Apple-style specular sheen — static pseudo-element layered over the frosted glass */
+#stage::before{
+  content:"";position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;
+  background:var(--apple-sheen);opacity:0.55;mix-blend-mode:soft-light;
+}
+#stage::after{
+  content:"";position:absolute;top:0;left:8%;right:8%;height:1px;z-index:3;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.95) 30%,rgba(255,255,255,0.95) 70%,transparent);
 }
 #stage-inner{position:relative;width:100%;height:100%;overflow:hidden;border-radius:inherit;}
 
@@ -142,7 +159,15 @@ i[data-lucide]{display:inline-flex;}
   border:1px solid var(--glass-border);border-radius:clamp(14px,1.2vw,24px);
   box-shadow:var(--glass-shadow);
   padding:clamp(14px,1.6vh,26px) clamp(16px,1.6vw,28px);
+  position:relative;
 }
+/* Apple-style inner specular rim on glass cards (static, GPU-safe) */
+.glass-card::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.95),inset 0 0 26px rgba(255,255,255,0.35);
+  background:var(--apple-sheen);opacity:0.30;mix-blend-mode:soft-light;
+}
+.glass-card > *{position:relative;z-index:1;}
 .pod-label{
   font-family:var(--font-mono);font-size:clamp(10px,0.72vw,14px);
   letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-c);
@@ -227,6 +252,16 @@ i[data-lucide]{display:inline-flex;}
 }
 #sync-label{font-family:var(--font-mono);font-size:clamp(10px,0.72vw,14px);letter-spacing:0.08em;text-transform:uppercase;}
 
+/* ---------- HUD : audio controls (top-right) ---------- */
+#sync-dot{width:10px;height:10px;border-radius:50%;background:#94A3B8;flex:0 0 auto;position:relative;}
+#audio-group{display:inline-flex;align-items:center;gap:6px;background:var(--neu-bg);box-shadow:var(--neu-out-sm);border:1px solid rgba(255,255,255,0.65);border-radius:999px;padding:4px;}
+#audio-group .neu-btn.icon-only{box-shadow:none;background:transparent;}
+#audio-group .neu-btn.icon-only:hover{box-shadow:none;}
+#audio-group .neu-btn.icon-only:active,#audio-group .neu-btn.icon-only.is-on{box-shadow:var(--neu-in);}
+#audio-group .neu-btn.icon-only.muted{color:#CBD5E1;}
+#audio-group .neu-btn.icon-only.muted i[data-lucide]{color:#CBD5E1;}
+#audio-group .sep{width:1px;height:22px;background:rgba(148,163,184,0.35);}
+
 /* Slide number chip top-left inside stage */
 #slide-chip{
   position:absolute;top:clamp(18px,2.2vh,30px);left:clamp(24px,2.6vw,44px);z-index:5;
@@ -272,6 +307,32 @@ body.presenter-click .clickzone{opacity:1;}
 .pill-neu i[data-lucide]{width:1.15em;height:1.15em;color:var(--cobalt);}
 .pill-neu:nth-child(2) i[data-lucide]{color:var(--indigo);}
 .pill-neu:nth-child(3) i[data-lucide]{color:var(--coral);}
+/* Author identity block — profile picture + name + phonetics */
+#s1 .author-block{display:flex;align-items:center;gap:clamp(14px,1.6vw,28px);margin-top:clamp(16px,2.2vh,30px);}
+#s1 .avatar-ring{
+  position:relative;width:clamp(74px,7.2vw,128px);height:clamp(74px,7.2vw,128px);flex:0 0 auto;
+  border-radius:50%;padding:5px;background:conic-gradient(from 140deg,var(--cobalt),var(--indigo),var(--coral),var(--cobalt));
+  box-shadow:0 14px 34px rgba(37,99,235,0.22);
+}
+#s1 .avatar-core{
+  width:100%;height:100%;border-radius:50%;overflow:hidden;background:var(--white);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,0.9);
+}
+#s1 .avatar-core img.avatar-img{width:100%;height:100%;object-fit:cover;display:block;}
+#s1 .avatar-fallback{font-family:var(--font-display);font-weight:800;font-size:clamp(22px,2.1vw,42px);color:var(--cobalt);letter-spacing:-0.02em;}
+#s1 .author-meta{display:flex;flex-direction:column;gap:0.18em;min-width:0;}
+#s1 .author-name{font-family:var(--font-display);font-weight:800;font-size:clamp(19px,1.9vw,38px);color:var(--ink-h);letter-spacing:0.01em;line-height:1.1;}
+#s1 .pronounce-btn{
+  display:inline-flex;align-items:center;gap:0.5em;margin-top:0.35em;width:max-content;
+  font-family:var(--font-mono);font-size:clamp(11px,0.82vw,16px);color:var(--cobalt);
+  background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);border-radius:999px;
+  padding:0.42em 0.95em;transition:transform 0.15s ease,background 0.2s ease;
+}
+#s1 .pronounce-btn:hover{background:rgba(37,99,235,0.12);}
+#s1 .pronounce-btn:active{transform:scale(0.97);}
+#s1 .pronounce-btn i[data-lucide]{width:1.05em;height:1.05em;}
+#s1 .author-role{font-size:clamp(10px,0.78vw,15px);color:var(--ink-c);letter-spacing:0.06em;text-transform:uppercase;font-family:var(--font-mono);}
 
 /* ---- Slide 2: Comparison grid ---- */
 .compare-grid{display:grid;grid-template-columns:1fr clamp(60px,6vw,120px) 1fr;gap:0;width:100%;align-items:stretch;}
@@ -546,37 +607,52 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 </head>
 <body>
 
-<!-- =================== THE ATTENTION PHASE-SPACE FIELD =================== -->
-<div id="field-wrap" aria-hidden="true">
-  <svg id="phase-field" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision">
-    <defs>
-      <linearGradient id="rgA" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#2563EB" stop-opacity="0.05"/>
-        <stop offset="55%" stop-color="#2563EB" stop-opacity="0.34"/>
-        <stop offset="100%" stop-color="#4F46E5" stop-opacity="0.10"/>
-      </linearGradient>
-      <linearGradient id="rgB" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#4F46E5" stop-opacity="0.06"/>
-        <stop offset="60%" stop-color="#4F46E5" stop-opacity="0.28"/>
-        <stop offset="100%" stop-color="#E11D48" stop-opacity="0.12"/>
-      </linearGradient>
-      <linearGradient id="rgC" x1="100%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#E11D48" stop-opacity="0.05"/>
-        <stop offset="60%" stop-color="#E11D48" stop-opacity="0.22"/>
-        <stop offset="100%" stop-color="#2563EB" stop-opacity="0.10"/>
-      </linearGradient>
-      <radialGradient id="attractorGlow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#2563EB" stop-opacity="0.16"/>
-        <stop offset="60%" stop-color="#4F46E5" stop-opacity="0.06"/>
-        <stop offset="100%" stop-color="#4F46E5" stop-opacity="0"/>
-      </radialGradient>
-    </defs>
-    <g id="grid-layer"></g>
-    <g id="ribbon-layer"></g>
-    <g id="reticle-layer"></g>
-    <g id="node-layer"></g>
-  </svg>
-</div>
+<!-- ============ SHARED SVG DEFS — gradients + generative motifs referenced by every slide field ============ -->
+<svg id="field-defs" width="0" height="0" style="position:absolute;left:-9999px;top:0;" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="rgA" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2563EB" stop-opacity="0.05"/>
+      <stop offset="55%" stop-color="#2563EB" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#4F46E5" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="rgB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5" stop-opacity="0.06"/>
+      <stop offset="60%" stop-color="#4F46E5" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#E11D48" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="rgC" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E11D48" stop-opacity="0.05"/>
+      <stop offset="60%" stop-color="#E11D48" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#2563EB" stop-opacity="0.10"/>
+    </linearGradient>
+    <radialGradient id="attractorGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2563EB" stop-opacity="0.16"/>
+      <stop offset="60%" stop-color="#4F46E5" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#4F46E5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="coralGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E11D48" stop-opacity="0.14"/>
+      <stop offset="60%" stop-color="#E11D48" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#E11D48" stop-opacity="0"/>
+    </radialGradient>
+    <!-- reticle rings motif -->
+    <g id="sym-reticle">
+      <circle r="34" fill="none" stroke="#2563EB" stroke-opacity="0.28" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+      <circle r="62" fill="none" stroke="#2563EB" stroke-opacity="0.18" stroke-width="1.2" stroke-dasharray="3 9" vector-effect="non-scaling-stroke"/>
+      <circle r="104" fill="none" stroke="#E11D48" stroke-opacity="0.16" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+      <path d="M -18 0 H 18 M 0 -18 V 18" stroke="#4F46E5" stroke-opacity="0.45" stroke-width="1.2" fill="none" vector-effect="non-scaling-stroke"/>
+    </g>
+    <!-- attractor core motif -->
+    <g id="sym-core">
+      <circle r="170" fill="url(#attractorGlow)"/>
+      <circle r="7" fill="#2563EB" opacity="0.9"/>
+    </g>
+    <!-- waveform cycle motif (one period, baseline y=0) -->
+    <path id="sym-wavecycle" d="M 0 0 C 80 -120, 160 -120, 240 0 C 320 120, 400 120, 480 0" fill="none" vector-effect="non-scaling-stroke"/>
+    <!-- speech burst motif -->
+    <path id="sym-burst" d="M 0 -46 L 12 -18 L 42 -26 L 20 -6 L 46 14 L 14 12 L 8 44 L -4 14 L -34 34 L -20 4 L -46 -8 L -14 -12 Z" fill="none" vector-effect="non-scaling-stroke"/>
+  </defs>
+</svg>
 
 <!-- =================== GLASSMORPHIC STAGE =================== -->
 <main id="stage" role="region" aria-label="Presentation stage">
@@ -587,12 +663,30 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 1 : TITLE & PROVOCATION ============ -->
 <section class="slide" id="s1" data-title="Title &amp; Provocation" aria-label="Slide 1 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <div class="slide-body">
     <div class="stagger stg-1">
       <span class="eyebrow"><i data-lucide="radio" stroke-width="2"></i> Q-Infinity Smart Board · Live Deck · 2026</span>
     </div>
     <h1 class="title-hero stagger stg-2">Algorithmic<br><span class="grad">Persuasion</span></h1>
     <p class="title-sub stagger stg-3">How Short-Form Feeds Rewire Human Communication &amp; Attention — and how ethical communicators can take those rewired circuits back.</p>
+    <div class="author-block stagger stg-3">
+      <div class="avatar-ring">
+        <div class="avatar-core">
+          <img class="avatar-img" src="Profilepicture.jpg" alt="Portrait of Lalit Mehta"
+               onload="this.style.display='block';var f=this.parentNode.querySelector('.avatar-fallback');if(f)f.style.display='none';"
+               onerror="this.style.display='none';var f=this.parentNode.querySelector('.avatar-fallback');if(f)f.style.display='flex';">
+          <span class="avatar-fallback" style="display:none;">LM</span>
+        </div>
+      </div>
+      <div class="author-meta">
+        <span class="author-role">Presented by</span>
+        <span class="author-name">LALIT MEHTA</span>
+        <button class="pronounce-btn" id="pronounce-btn" type="button" title="Hear the pronunciation (accesskey: v)" accesskey="v" aria-label="Play phonetic pronunciation of Lalit">
+          <i data-lucide="volume-2" stroke-width="2"></i> /ləlɪt̪/ &nbsp;luh · lit
+        </button>
+      </div>
+    </div>
     <div class="s1-grid stagger stg-4">
       <div class="neu-pod" id="decay-pod">
         <div class="pod-label"><i data-lucide="timer" stroke-width="2"></i> Attention Decay Counter · Mean Visual Fixation</div>
@@ -620,6 +714,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 2 : THE CORE PROBLEM ============ -->
 <section class="slide" id="s2" data-title="The Linear Storytelling Collapse" aria-label="Slide 2 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow coral"><i data-lucide="triangle-alert" stroke-width="2"></i> Core Problem · 02</span>
     <h2 class="slide-title">The <span class="accent-c">Linear Storytelling</span> Collapse</h2>
@@ -653,6 +748,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 3 : THE CORE MECHANISM ============ -->
 <section class="slide" id="s3" data-title="The Dopamine &amp; Prediction Error Loop" aria-label="Slide 3 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow indigo"><i data-lucide="activity" stroke-width="2"></i> Core Mechanism · 03</span>
     <h2 class="slide-title">The <span class="accent-i">Dopamine</span> &amp; Prediction-Error Loop</h2>
@@ -711,6 +807,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 4 : USE CASE #1 — HOOK ============ -->
 <section class="slide" id="s4" data-title="The 3-Second Visual &amp; Semantic Hook" aria-label="Slide 4 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow"><i data-lucide="target" stroke-width="2"></i> Use Case 01 · The Hook</span>
     <h2 class="slide-title">The <span class="accent">3-Second</span> Visual &amp; Semantic Hook</h2>
@@ -746,6 +843,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 5 : USE CASE #2 — PROGRESSIVE DISCLOSURE ============ -->
 <section class="slide" id="s5" data-title="Progressive Disclosure &amp; Pacing Architecture" aria-label="Slide 5 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow indigo"><i data-lucide="route" stroke-width="2"></i> Use Case 02 · Pacing</span>
     <h2 class="slide-title">Progressive Disclosure &amp; <span class="accent-i">Pacing Architecture</span></h2>
@@ -802,6 +900,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 6 : USE CASE #3 — MICRO-INTERACTIONS ============ -->
 <section class="slide" id="s6" data-title="Micro-Interactions &amp; Multi-Sensory Anchoring" aria-label="Slide 6 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow"><i data-lucide="sparkles" stroke-width="2"></i> Use Case 03 · Anchoring</span>
     <h2 class="slide-title">Micro-Interactions &amp; <span class="accent">Multi-Sensory Anchoring</span></h2>
@@ -838,6 +937,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 7 : THE DARK SIDE ============ -->
 <section class="slide" id="s7" data-title="Signal Compression vs. Cognitive Shallowing" aria-label="Slide 7 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow coral"><i data-lucide="shield-alert" stroke-width="2"></i> The Dark Side · 07</span>
     <h2 class="slide-title">Signal Compression vs. <span class="accent-c">Cognitive Shallowing</span></h2>
@@ -866,6 +966,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 8 : THE COMMUNICATOR'S SYNTHESIS ============ -->
 <section class="slide" id="s8" data-title="Hijacking the Feed Rules for Deep Ideas" aria-label="Slide 8 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow indigo"><i data-lucide="wrench" stroke-width="2"></i> Synthesis · 08</span>
     <h2 class="slide-title">Hijacking the Feed Rules <span class="accent-i">for Deep Ideas</span></h2>
@@ -906,6 +1007,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 9 : THE 10-MINUTE BLUEPRINT ============ -->
 <section class="slide" id="s9" data-title="The 10-Minute Blueprint" aria-label="Slide 9 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow"><i data-lucide="layout-template" stroke-width="2"></i> Blueprint · 09</span>
     <h2 class="slide-title">The 10-Minute <span class="accent">Blueprint</span> — Before vs. After</h2>
@@ -931,6 +1033,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- ============ SLIDE 10 : CLOSING SYNTHESIS ============ -->
 <section class="slide" id="s10" data-title="Closing Synthesis &amp; Live Reveal" aria-label="Slide 10 of 10">
+  <div class="slide-field"><svg class="field-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" shape-rendering="geometricPrecision"></svg></div>
   <header class="slide-head stagger stg-1">
     <span class="eyebrow coral"><i data-lucide="flag" stroke-width="2"></i> Closing Synthesis · 10</span>
   </header>
@@ -965,6 +1068,11 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- =================== HUD : TOP-RIGHT FULLSCREEN & SYNC BAR =================== -->
 <div class="hud" id="topbar">
+  <div id="audio-group" role="group" aria-label="Audio controls">
+    <button class="neu-btn icon-only" id="sfx-toggle" accesskey="x" title="Toggle action interface sounds (accesskey: x)" aria-label="Toggle action sounds" aria-pressed="true"><i data-lucide="volume-2" stroke-width="2"></i></button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="neu-btn icon-only" id="bgm-toggle" accesskey="b" title="Toggle ambient music (accesskey: b)" aria-label="Toggle ambient background music" aria-pressed="true"><i data-lucide="music" stroke-width="2"></i></button>
+  </div>
   <button class="neu-btn icon-only" id="presenter-toggle" accesskey="c" title="Toggle presenter click zones (accesskey: c)" aria-label="Toggle presenter click mode"><i data-lucide="mouse-pointer-click" stroke-width="2"></i></button>
   <button class="neu-btn" id="sync-btn" accesskey="r" title="Open phone remote sync modal (accesskey: r)" aria-haspopup="dialog">
     <span id="sync-dot" aria-hidden="true"></span><span id="sync-label">SYNC</span>
@@ -1077,6 +1185,199 @@ const IS_REMOTE = params.get('mode') === 'remote';
 /* shared room topic — default qinfinity/lalit/algo-persuasion-2026, customizable via ?room=xyz */
 let roomTopic = params.get('room') ? params.get('room') : 'qinfinity/lalit/algo-persuasion-2026';
 
+/* ---------------------------------------------------------------------------
+   AUDIO ENGINE — synthesized, zero-asset, mesmerising sound design.
+   Action SFX for every click / slide / animation event + generative ambient
+   BGM pad. Both independently toggleable; persisted in localStorage.
+--------------------------------------------------------------------------- */
+const AudioEngine = (() => {
+  let ctx = null, master = null, wet = null, convolver = null, noiseBuf = null, bgmBus = null;
+  let bgmOn = true, sfxOn = true, bgmPlaying = false, bgmTimer = null, nextBellAt = 0;
+  try { bgmOn = localStorage.getItem('ap-bgm') !== 'off'; } catch (e) {}
+  try { sfxOn = localStorage.getItem('ap-sfx') !== 'off'; } catch (e) {}
+
+  function ensure() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return true; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+    /* lightweight generated reverb (2.8s stereo decaying noise IR) */
+    convolver = ctx.createConvolver();
+    wet = ctx.createGain(); wet.gain.value = 0.34;
+    const len = Math.floor(ctx.sampleRate * 2.8);
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.4);
+    }
+    convolver.buffer = ir; convolver.connect(wet); wet.connect(master);
+    bgmBus = ctx.createGain(); bgmBus.gain.value = 0.0001; bgmBus.connect(master);
+    /* shared white-noise buffer for airy/swish layers */
+    const nlen = Math.floor(ctx.sampleRate * 1.2);
+    noiseBuf = ctx.createBuffer(1, nlen, ctx.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nlen; i++) nd[i] = Math.random() * 2 - 1;
+    return true;
+  }
+
+  const now = () => ctx.currentTime;
+  function tone(freq, t0, dur, type, vol, glideTo, bus) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t0);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(bus || master); g.connect(convolver);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  function noiseHit(t0, dur, f0, f1, vol, q) {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q || 1.1;
+    bp.frequency.setValueAtTime(f0, t0);
+    bp.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp); bp.connect(g); g.connect(master); g.connect(convolver);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  }
+
+  /* ---- action sounds: soft, glassy, pentatonic — satisfying, never harsh ---- */
+  const SFX = {
+    tap()     { const t = now(); tone(1180, t, 0.09, 'triangle', 0.10); noiseHit(t, 0.05, 3200, 1400, 0.03); },
+    toggle()  { const t = now(); tone(660, t, 0.10, 'triangle', 0.09); tone(990, t + 0.055, 0.12, 'sine', 0.07); },
+    forward() { const t = now(); [523.25, 659.25, 783.99].forEach((f, i) => tone(f, t + i * 0.06, 0.5, 'sine', 0.085)); noiseHit(t, 0.22, 900, 2600, 0.028, 0.8); },
+    back()    { const t = now(); [783.99, 659.25, 523.25].forEach((f, i) => tone(f, t + i * 0.06, 0.5, 'sine', 0.075)); noiseHit(t, 0.2, 2400, 800, 0.024, 0.8); },
+    jump()    { const t = now(); tone(440, t, 0.32, 'triangle', 0.09, 1318.5); tone(880, t + 0.05, 0.4, 'sine', 0.05); },
+    reveal()  { const t = now(); [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, t + i * 0.07, 0.9, 'sine', 0.07)); tone(261.6, t, 1.4, 'triangle', 0.05); },
+    open()    { const t = now(); tone(392, t, 0.4, 'sine', 0.08, 784); tone(587.3, t + 0.08, 0.5, 'sine', 0.05); },
+    close()   { const t = now(); tone(784, t, 0.3, 'sine', 0.07, 392); },
+    morph()   { const t = now(); tone(329.6, t, 0.5, 'triangle', 0.07, 659.3); tone(493.9, t + 0.1, 0.55, 'sine', 0.05, 987.8); },
+    kinetic() { const t = now(); tone(1567.98, t, 0.35, 'sine', 0.05); tone(2349.3, t + 0.02, 0.25, 'sine', 0.03); },
+    chime()   { const t = now(); tone(1046.5, t, 1.6, 'sine', 0.06); tone(1567.98, t + 0.02, 1.2, 'sine', 0.035); }
+  };
+  function play(name) {
+    if (!sfxOn || IS_REMOTE) return;
+    if (!ensure()) return;
+    try { SFX[name] && SFX[name](); } catch (e) {}
+  }
+
+  /* ---- ambient generative BGM: warm detuned pad + sparse bell rain ---- */
+  const PENTA = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+  function startBGM() {
+    if (bgmPlaying || !ensure() || !bgmOn) return;
+    bgmPlaying = true;
+    const base = [130.81, 196.0, 261.63]; // C3 · G3 · C4 — open fifths, calm
+    base.forEach((f, i) => {
+      [-3.5, 3.5].forEach((cents) => {
+        const o = ctx.createOscillator(); o.type = i === 2 ? 'triangle' : 'sine';
+        o.frequency.value = f; o.detune.value = cents;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 620 + i * 240; lp.Q.value = 0.5;
+        const g = ctx.createGain(); g.gain.value = 0.0001;
+        g.gain.exponentialRampToValueAtTime(i === 2 ? 0.016 : 0.026, now() + 6);
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.045 + i * 0.017;
+        const lg = ctx.createGain(); lg.gain.value = 0.011;
+        lfo.connect(lg); lg.connect(g.gain); lfo.start();
+        o.connect(lp); lp.connect(g); g.connect(bgmBus); g.connect(convolver);
+        o.start();
+      });
+    });
+    const air = ctx.createBufferSource(); air.buffer = noiseBuf; air.loop = true;
+    const abp = ctx.createBiquadFilter(); abp.type = 'bandpass'; abp.frequency.value = 900; abp.Q.value = 0.4;
+    const ag = ctx.createGain(); ag.gain.value = 0.0001;
+    ag.gain.linearRampToValueAtTime(0.0045, now() + 8);
+    const alfo = ctx.createOscillator(); alfo.frequency.value = 0.07;
+    const alg = ctx.createGain(); alg.gain.value = 320;
+    alfo.connect(alg); alg.connect(abp.frequency); alfo.start();
+    air.connect(abp); abp.connect(ag); ag.connect(bgmBus); ag.connect(convolver);
+    air.start();
+    nextBellAt = now() + 4;
+    bgmTimer = setInterval(scheduleBells, 1500);
+  }
+  function scheduleBells() {
+    if (!ctx || !bgmOn) return;
+    while (nextBellAt < ctx.currentTime + 2) {
+      const f = PENTA[Math.floor(Math.random() * PENTA.length)];
+      tone(f, nextBellAt, 2.6, 'sine', 0.035 + Math.random() * 0.02, null, bgmBus);
+      tone(f * 2, nextBellAt + 0.01, 1.6, 'sine', 0.012, null, bgmBus);
+      nextBellAt += 3.5 + Math.random() * 6;
+    }
+  }
+  function setBGM(on) {
+    bgmOn = on;
+    try { localStorage.setItem('ap-bgm', on ? 'on' : 'off'); } catch (e) {}
+    if (on) { startBGM(); if (ctx && bgmBus) bgmBus.gain.linearRampToValueAtTime(1, now() + 1.4); }
+    else if (ctx && bgmBus) bgmBus.gain.linearRampToValueAtTime(0.0001, now() + 0.8);
+  }
+  function setSFX(on) {
+    sfxOn = on;
+    try { localStorage.setItem('ap-sfx', on ? 'on' : 'off'); } catch (e) {}
+  }
+  function unlock() {
+    if (!ensure()) return;
+    if (bgmOn) { startBGM(); bgmBus.gain.linearRampToValueAtTime(1, now() + 2.5); }
+  }
+  return {
+    play, unlock, setBGM, setSFX,
+    isBGM: () => bgmOn, isSFX: () => sfxOn,
+    /* phonetic readout of the presenter's name — Web Speech API */
+    pronounce() {
+      try {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance('luh, lit. Lalit Mehta.');
+          u.lang = 'en-IN'; u.rate = 0.82; u.pitch = 1.0; u.volume = 1;
+          const pick = (window.speechSynthesis.getVoices() || [])
+            .find(v => /en[-_]IN/i.test(v.lang)) ||
+            (window.speechSynthesis.getVoices() || []).find(v => /^en/i.test(v.lang));
+          if (pick) u.voice = pick;
+          window.speechSynthesis.speak(u);
+        }
+      } catch (e) {}
+    }
+  };
+})();
+
+/* global gesture unlock — browsers require a user gesture before audio can start */
+['pointerdown', 'keydown', 'touchstart'].forEach((ev) => {
+  window.addEventListener(ev, () => AudioEngine.unlock(), { once: true, passive: true });
+});
+
+/* HUD audio toggle buttons */
+function refreshAudioIcons() {
+  const s = $('#sfx-toggle'), b = $('#bgm-toggle');
+  if (s) {
+    s.innerHTML = `<i data-lucide="${AudioEngine.isSFX() ? 'volume-2' : 'volume-x'}" stroke-width="2"></i>`;
+    s.classList.toggle('muted', !AudioEngine.isSFX());
+    s.setAttribute('aria-pressed', String(AudioEngine.isSFX()));
+  }
+  if (b) {
+    b.innerHTML = `<i data-lucide="${AudioEngine.isBGM() ? 'music' : 'music-off'}" stroke-width="2"></i>`;
+    b.classList.toggle('muted', !AudioEngine.isBGM());
+    b.setAttribute('aria-pressed', String(AudioEngine.isBGM()));
+  }
+  if (window.lucide) lucide.createIcons();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  $('#sfx-toggle').addEventListener('click', () => {
+    AudioEngine.setSFX(!AudioEngine.isSFX());
+    refreshAudioIcons();
+    AudioEngine.play('toggle');
+  });
+  $('#bgm-toggle').addEventListener('click', () => {
+    AudioEngine.setBGM(!AudioEngine.isBGM());
+    refreshAudioIcons();
+    AudioEngine.play('toggle');
+  });
+  const pb = $('#pronounce-btn');
+  if (pb) pb.addEventListener('click', () => { AudioEngine.play('chime'); AudioEngine.pronounce(); });
+  refreshAudioIcons();
+});
+
 const T0 = Date.now();                       // presentation runtime epoch
 let slideIndex = 0;                          // current slide (0-based)
 const TOTAL = 10;
@@ -1096,156 +1397,377 @@ const CUES = [
 ];
 
 /* ---------------------------------------------------------------------------
-   THE ATTENTION PHASE-SPACE FIELD — parametric harmonic ribbons
-   14 cubic-bezier trajectories converging on an algorithmic attractor node.
-   Attractor focal point smoothly re-interpolates whenever the slide changes.
+   PER-SLIDE GENERATIVE VECTOR FIELDS — one bespoke, content-relevant animated
+   SVG field INSIDE the slide stage for each of the 10 slides. Each field owns
+   its own RAF loop; only the active slide animates (others stay paused).
 --------------------------------------------------------------------------- */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const field = {
-  attractor: { x: 1500, y: 320 },        // current
-  target:    { x: 1500, y: 320 },        // per-slide goal
+const mk = (tag, attrs) => {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
 };
-const RIBBON_GRADS = ['rgA', 'rgB', 'rgC'];
-const ribbons = [];
-const nodes = [];
-let reticleG, attractorCore, gridLayer = $('#grid-layer'), ribbonLayer = $('#ribbon-layer'),
-    reticleLayer = $('#reticle-layer'), nodeLayer = $('#node-layer');
+const svgOf = (n) => document.querySelector('#s' + n + ' .slide-field svg');
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function buildField() {
-  /* phase-grid crosshairs */
-  for (let gx = 120; gx < 1920; gx += 240) {
-    for (let gy = 120; gy < 1080; gy += 240) {
-      const g = document.createElementNS(SVGNS, 'path');
-      g.setAttribute('d', `M ${gx-7} ${gy} H ${gx+7} M ${gx} ${gy-7} V ${gy+7}`);
-      g.setAttribute('stroke', '#64748B');
-      g.setAttribute('stroke-opacity', '0.10');
-      g.setAttribute('stroke-width', '1');
-      g.setAttribute('vector-effect', 'non-scaling-stroke');
-      g.setAttribute('fill', 'none');
-      gridLayer.appendChild(g);
-    }
-  }
-  /* 14 parametric ribbons */
-  for (let i = 0; i < 14; i++) {
-    const p = document.createElementNS(SVGNS, 'path');
-    const grad = RIBBON_GRADS[i % 3];
-    p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', `url(#${grad})`);
-    p.setAttribute('stroke-width', String(1 + (i % 4)));
-    p.setAttribute('vector-effect', 'non-scaling-stroke');
-    p.setAttribute('shape-rendering', 'geometricPrecision');
+function makeField(n, build, step) {
+  const svg = svgOf(n);
+  if (!svg) return null;
+  const st = { svg, t: 0, raf: null, running: false, d: {} };
+  build(st);
+  const loop = () => {
+    if (!st.running) return;
+    st.t += 1 / 60;
+    try { step(st); } catch (e) {}
+    st.raf = requestAnimationFrame(loop);
+  };
+  st.start = () => { if (st.running || REDUCED) return; st.running = true; st.raf = requestAnimationFrame(loop); };
+  st.stop = () => { st.running = false; if (st.raf) cancelAnimationFrame(st.raf); };
+  return st;
+}
+
+const fields = [];
+
+/* ---- 1 · Title: attention ribbons converging on an algorithmic attractor ---- */
+fields.push(makeField(1, (f) => {
+  const grid = mk('g', {}), rib = mk('g', {}), ret = mk('g', {}), nd = mk('g', {});
+  f.svg.append(grid, rib, ret, nd);
+  for (let gx = 120; gx < 1920; gx += 240) for (let gy = 120; gy < 1080; gy += 240)
+    grid.appendChild(mk('path', { d: `M ${gx-7} ${gy} H ${gx+7} M ${gx} ${gy-7} V ${gy+7}`, stroke: '#64748B', 'stroke-opacity': 0.10, 'stroke-width': 1, fill: 'none', 'vector-effect': 'non-scaling-stroke' }));
+  f.d.ribbons = [];
+  for (let i = 0; i < 12; i++) {
+    const p = mk('path', { fill: 'none', stroke: `url(#${['rgA','rgB','rgC'][i % 3]})`, 'stroke-width': String(1 + (i % 4)), 'vector-effect': 'non-scaling-stroke' });
     if (i % 5 === 2) p.setAttribute('stroke-dasharray', '10 14');
-    ribbonLayer.appendChild(p);
-    const seed = i * 137.508; // golden-angle seeding for organic spread
-    ribbons.push({
-      el: p, i, seed,
-      yBase: 90 + (i / 13) * 900,
-      amp: 40 + (i % 5) * 26,
-      freq: 0.6 + (i % 7) * 0.17,
-      phase: (seed % 360) * Math.PI / 180,
-      speed: 0.12 + (i % 6) * 0.035,
-      dash: (i % 5 === 2),
-      dashOff: 0
-    });
+    rib.appendChild(p);
+    f.d.ribbons.push({ el: p, seed: i * 137.508, yBase: 90 + (i / 11) * 900, amp: 40 + (i % 5) * 26, freq: 0.6 + (i % 7) * 0.17, phase: (i * 137.508 % 360) * Math.PI / 180, speed: 0.12 + (i % 6) * 0.035, dash: i % 5 === 2 });
   }
-  /* geometric precision reticle rings around attractor */
-  reticleG = document.createElementNS(SVGNS, 'g');
-  [34, 62, 104].forEach((r, k) => {
-    const c = document.createElementNS(SVGNS, 'circle');
-    c.setAttribute('r', String(r));
-    c.setAttribute('fill', 'none');
-    c.setAttribute('stroke', k === 2 ? '#E11D48' : '#2563EB');
-    c.setAttribute('stroke-opacity', String(0.30 - k * 0.07));
-    c.setAttribute('stroke-width', '1.2');
-    c.setAttribute('vector-effect', 'non-scaling-stroke');
-    if (k === 1) c.setAttribute('stroke-dasharray', '3 9');
-    reticleG.appendChild(c);
-  });
-  const cross = document.createElementNS(SVGNS, 'path');
-  cross.setAttribute('d', 'M -18 0 H 18 M 0 -18 V 18');
-  cross.setAttribute('stroke', '#4F46E5');
-  cross.setAttribute('stroke-opacity', '0.5');
-  cross.setAttribute('stroke-width', '1.2');
-  cross.setAttribute('vector-effect', 'non-scaling-stroke');
-  reticleG.appendChild(cross);
-  attractorCore = document.createElementNS(SVGNS, 'circle');
-  attractorCore.setAttribute('r', '7');
-  attractorCore.setAttribute('fill', '#2563EB');
-  attractorCore.setAttribute('opacity', '0.9');
-  reticleG.appendChild(attractorCore);
-  const glow = document.createElementNS(SVGNS, 'circle');
-  glow.setAttribute('r', '170');
-  glow.setAttribute('fill', 'url(#attractorGlow)');
-  reticleG.insertBefore(glow, reticleG.firstChild);
-  reticleLayer.appendChild(reticleG);
-  /* animated telemetry nodes drifting along trajectories */
-  for (let n = 0; n < 8; n++) {
-    const c = document.createElementNS(SVGNS, 'circle');
-    c.setAttribute('r', String(2.5 + (n % 3)));
-    c.setAttribute('fill', n % 3 === 0 ? '#E11D48' : (n % 3 === 1 ? '#2563EB' : '#4F46E5'));
-    c.setAttribute('opacity', '0.5');
-    nodeLayer.appendChild(c);
-    nodes.push({ el: c, t: n / 8, speed: 0.03 + (n % 4) * 0.012, row: n % 14 });
+  const r = mk('use', { href: '#sym-reticle' }); ret.appendChild(r);
+  const core = mk('use', { href: '#sym-core' }); ret.appendChild(core);
+  f.d.ret = r; f.d.core = core; f.d.ax = 1560; f.d.ay = 300;
+  f.d.nodes = [];
+  for (let m = 0; m < 7; m++) {
+    const c = mk('circle', { r: String(2.5 + (m % 3)), fill: ['#E11D48','#2563EB','#4F46E5'][m % 3], opacity: 0.5 });
+    nd.appendChild(c);
+    f.d.nodes.push({ el: c, t: m / 7, speed: 0.03 + (m % 4) * 0.012, row: m % 12 });
   }
-}
-
-function ribbonPath(rb, time) {
-  /* start far left, converge toward attractor with harmonic modulation */
-  const ax = field.attractor.x, ay = field.attractor.y;
-  const drift = Math.sin(time * rb.speed + rb.phase) * rb.amp;
-  const y0 = rb.yBase + drift;
-  const x0 = -60;
-  const mx1 = 420 + Math.sin(time * rb.speed * 0.7 + rb.seed) * 120;
-  const my1 = y0 + Math.cos(time * rb.freq * 0.5 + rb.phase) * rb.amp * 1.6;
-  const mx2 = 1080 + Math.sin(time * rb.speed * 0.9 + rb.phase * 2) * 90;
-  const my2 = lerp(y0, ay, 0.55) + Math.sin(time * rb.freq + rb.seed) * rb.amp * 0.7;
-  return `M ${x0.toFixed(1)} ${y0.toFixed(1)} C ${mx1.toFixed(1)} ${my1.toFixed(1)}, ${mx2.toFixed(1)} ${my2.toFixed(1)}, ${ax.toFixed(1)} ${ay.toFixed(1)}`;
-}
-
-let fieldRAF = null, lastT = performance.now(), dashTick = 0;
-function fieldLoop(now) {
-  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
-  const time = now / 1000;
-  /* smooth interpolation of attractor focus toward per-slide target */
-  const k = 1 - Math.pow(0.0025, dt); // frame-rate independent easing
-  field.attractor.x = lerp(field.attractor.x, field.target.x, k);
-  field.attractor.y = lerp(field.attractor.y, field.target.y, k);
-  reticleG.setAttribute('transform', `translate(${field.attractor.x.toFixed(2)} ${field.attractor.y.toFixed(2)}) rotate(${(time * 6).toFixed(2)})`);
-  dashTick += dt * 26;
-  for (const rb of ribbons) {
-    rb.el.setAttribute('d', ribbonPath(rb, time));
-    if (rb.dash) rb.el.setAttribute('stroke-dashoffset', (-dashTick % 9999).toFixed(1));
-  }
-  for (const nd of nodes) {
-    nd.t += nd.speed * dt; if (nd.t > 1) nd.t -= 1;
-    const rb = ribbons[nd.row];
-    const tt = nd.t;
-    /* approximate position along the cubic via de Casteljau */
-    const d = rb.el.getAttribute('d'); // parse cheaply: rebuild same control pts
-    const ax = field.attractor.x, ay = field.attractor.y;
+}, (f) => {
+  const time = f.t;
+  f.d.ax = 1560 + Math.sin(time * 0.11) * 60;
+  f.d.ay = 300 + Math.cos(time * 0.09) * 46;
+  f.d.ret.setAttribute('transform', `translate(${f.d.ax.toFixed(1)} ${f.d.ay.toFixed(1)}) rotate(${(time * 6).toFixed(2)})`);
+  f.d.core.setAttribute('transform', `translate(${f.d.ax.toFixed(1)} ${f.d.ay.toFixed(1)})`);
+  const dashOff = time * 26;
+  for (const rb of f.d.ribbons) {
     const drift = Math.sin(time * rb.speed + rb.phase) * rb.amp;
     const y0 = rb.yBase + drift;
     const mx1 = 420 + Math.sin(time * rb.speed * 0.7 + rb.seed) * 120;
     const my1 = y0 + Math.cos(time * rb.freq * 0.5 + rb.phase) * rb.amp * 1.6;
     const mx2 = 1080 + Math.sin(time * rb.speed * 0.9 + rb.phase * 2) * 90;
-    const my2 = lerp(y0, ay, 0.55) + Math.sin(time * rb.freq + rb.seed) * rb.amp * 0.7;
-    const mt = 1 - tt;
-    const bx = mt*mt*mt*(-60) + 3*mt*mt*tt*mx1 + 3*mt*tt*tt*mx2 + tt*tt*tt*ax;
-    const by = mt*mt*mt*y0 + 3*mt*mt*tt*my1 + 3*mt*tt*tt*my2 + tt*tt*tt*ay;
-    nd.el.setAttribute('cx', bx.toFixed(1));
-    nd.el.setAttribute('cy', by.toFixed(1));
+    const my2 = lerp(y0, f.d.ay, 0.55) + Math.sin(time * rb.freq + rb.seed) * rb.amp * 0.7;
+    rb.el.setAttribute('d', `M -60 ${y0.toFixed(1)} C ${mx1.toFixed(1)} ${my1.toFixed(1)}, ${mx2.toFixed(1)} ${my2.toFixed(1)}, ${f.d.ax.toFixed(1)} ${f.d.ay.toFixed(1)}`);
+    if (rb.dash) rb.el.setAttribute('stroke-dashoffset', (-dashOff % 9999).toFixed(1));
+    rb._c = [y0, mx1, my1, mx2, my2];
   }
-  fieldRAF = requestAnimationFrame(fieldLoop);
-}
+  for (const nod of f.d.nodes) {
+    nod.t += nod.speed / 60; if (nod.t > 1) nod.t -= 1;
+    const rb = f.d.ribbons[nod.row]; if (!rb || !rb._c) continue;
+    const [y0, mx1, my1, mx2, my2] = rb._c, tt = nod.t, mt = 1 - tt;
+    nod.el.setAttribute('cx', (mt*mt*mt*-60 + 3*mt*mt*tt*mx1 + 3*mt*tt*tt*mx2 + tt*tt*tt*f.d.ax).toFixed(1));
+    nod.el.setAttribute('cy', (mt*mt*mt*y0 + 3*mt*mt*tt*my1 + 3*mt*tt*tt*my2 + tt*tt*tt*f.d.ay).toFixed(1));
+  }
+}));
 
-/* attractor focal coordinates per slide (viewBox space) */
-const FOCI = [
-  [1560, 300], [360, 780], [960, 210], [1620, 720], [300, 300],
-  [1300, 880], [620, 540], [1680, 420], [960, 900], [960, 540]
-];
-function setFocusForSlide(idx) {
-  const f = FOCI[idx % FOCI.length];
-  field.target.x = f[0]; field.target.y = f[1];
+/* ---- 2 · Collapse: legacy waveform decaying into fragmented noise blocks ---- */
+fields.push(makeField(2, (f) => {
+  const g1 = mk('g', {}), g2 = mk('g', {});
+  f.svg.append(g1, g2);
+  f.d.waves = [];
+  for (let w = 0; w < 5; w++) {
+    const p = mk('path', { fill: 'none', stroke: `url(#${['rgA','rgB','rgC'][w % 3]})`, 'stroke-width': String(1.4 + (w % 3)), 'vector-effect': 'non-scaling-stroke', opacity: 0.9 - w * 0.12 });
+    g1.appendChild(p);
+    f.d.waves.push({ el: p, base: 200 + w * 150, amp: 90 - w * 12, ph: w * 0.9 });
+  }
+  f.d.blocks = [];
+  for (let b = 0; b < 26; b++) {
+    const r = mk('rect', { width: 14, height: 14, rx: 3, fill: b % 4 ? '#2563EB' : '#E11D48', opacity: 0.10 });
+    g2.appendChild(r);
+    f.d.blocks.push({ el: r, x: 120 + b * 66, y: 950, seed: b * 47.3 });
+  }
+}, (f) => {
+  const t = f.t;
+  for (const w of f.d.waves) {
+    let dPath = 'M 0 ' + w.base;
+    for (let x = 0; x <= 1920; x += 64) {
+      const decay = 1 / (1 + x / 760);                        // amplitude collapse left→right
+      const chop = x > 1150 ? Math.sign(Math.sin(x * 0.05 + t)) * 26 : 0; // fragmentation zone
+      const y = w.base + Math.sin(x * 0.006 + t * (0.8 + w.ph * 0.2) + w.ph) * w.amp * decay + chop;
+      dPath += ` L ${x} ${y.toFixed(1)}`;
+    }
+    w.el.setAttribute('d', dPath);
+  }
+  for (const b of f.d.blocks) {
+    const jitter = Math.sin(t * 2.1 + b.seed) * 10 + Math.sin(t * 5.7 + b.seed * 2) * 4;
+    const fall = ((t * 40 + b.seed * 9) % 1080);
+    b.el.setAttribute('x', (b.x + Math.sin(t * 1.3 + b.seed) * 6).toFixed(1));
+    b.el.setAttribute('y', (fall - 40 + jitter).toFixed(1));
+    b.el.setAttribute('opacity', (0.05 + 0.10 * Math.abs(Math.sin(t + b.seed))).toFixed(3));
+  }
+}));
+
+/* ---- 3 · Dopamine loop: reward pulses orbiting a prediction-error ellipse ---- */
+fields.push(makeField(3, (f) => {
+  const g = mk('g', {}); f.svg.appendChild(g);
+  const ell = mk('ellipse', { cx: 960, cy: 540, rx: 620, ry: 300, fill: 'none', stroke: 'url(#rgB)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', opacity: 0.8 });
+  const ell2 = mk('ellipse', { cx: 960, cy: 540, rx: 620, ry: 300, fill: 'none', stroke: 'url(#rgC)', 'stroke-width': 1.6, 'stroke-dasharray': '8 12', 'vector-effect': 'non-scaling-stroke', opacity: 0.7 });
+  const rot = mk('g', {});
+  rot.appendChild(ell); rot.appendChild(ell2);
+  g.appendChild(rot);
+  f.d.rot = rot;
+  f.d.pulses = [];
+  for (let i = 0; i < 4; i++) {
+    const halo = mk('circle', { r: 26, fill: 'url(#attractorGlow)' });
+    const c = mk('circle', { r: 7, fill: i % 2 ? '#4F46E5' : '#E11D48', opacity: 0.85 });
+    g.appendChild(halo); g.appendChild(c);
+    f.d.pulses.push({ c, halo, ph: i / 4, sp: 0.16 + (i % 3) * 0.05 });
+  }
+  const spark = mk('g', {}); g.appendChild(spark); f.d.spark = spark; f.d.sparks = [];
+}, (f) => {
+  const t = f.t;
+  f.d.rot.setAttribute('transform', `rotate(${(Math.sin(t * 0.12) * 4).toFixed(2)} 960 540)`);
+  for (const p of f.d.pulses) {
+    const a = (t * p.sp + p.ph) * Math.PI * 2;
+    const err = 1 + 0.10 * Math.sin(a * 3 + t);              // prediction-error wobble
+    const x = 960 + Math.cos(a) * 620 * err, y = 540 + Math.sin(a) * 300 * err;
+    p.c.setAttribute('cx', x.toFixed(1)); p.c.setAttribute('cy', y.toFixed(1));
+    p.halo.setAttribute('cx', x.toFixed(1)); p.halo.setAttribute('cy', y.toFixed(1));
+    p.c.setAttribute('opacity', (0.55 + 0.35 * Math.abs(Math.sin(a * 2))).toFixed(2));
+  }
+  /* intermittent reinforcement sparks at random pulse positions */
+  if (Math.random() < 0.02) {
+    const p = f.d.pulses[Math.floor(Math.random() * 4)];
+    const x = parseFloat(p.c.getAttribute('cx')), y = parseFloat(p.c.getAttribute('cy'));
+    const s = mk('circle', { cx: x, cy: y, r: 4, fill: '#4F46E5', opacity: 0.8 });
+    f.d.spark.appendChild(s); f.d.sparks.push({ el: s, life: 1 });
+  }
+  f.d.sparks = f.d.sparks.filter((s) => {
+    s.life -= 0.02;
+    s.el.setAttribute('r', (14 * (1 - s.life) + 3).toFixed(1));
+    s.el.setAttribute('opacity', (s.life * 0.7).toFixed(2));
+    if (s.life <= 0) { s.el.remove(); return false; }
+    return true;
+  });
+}));
+
+/* ---- 4 · Hook: concentric ripple rings emanating from a fixed gaze point ---- */
+fields.push(makeField(4, (f) => {
+  const g = mk('g', {}); f.svg.appendChild(g);
+  const anchor = mk('circle', { cx: 1450, cy: 330, r: 6, fill: '#E11D48', opacity: 0.85 });
+  g.appendChild(anchor);
+  f.d.rings = [];
+  for (let i = 0; i < 7; i++) {
+    const c = mk('circle', { cx: 1450, cy: 330, r: 10, fill: 'none', stroke: i % 2 ? '#2563EB' : '#4F46E5', 'stroke-width': 1.4, 'vector-effect': 'non-scaling-stroke' });
+    g.appendChild(c);
+    f.d.rings.push({ el: c, ph: i / 7 });
+  }
+  /* three-second fixation sweep wedge */
+  const wedge = mk('path', { d: 'M 1450 330 L 1450 30 A 300 300 0 0 1 1610 120 Z', fill: 'url(#attractorGlow)', opacity: 0.5 });
+  g.appendChild(wedge); f.d.wedge = wedge;
+}, (f) => {
+  const t = f.t;
+  for (const r of f.d.rings) {
+    const k = ((t * 0.22 + r.ph) % 1);
+    r.el.setAttribute('r', (12 + k * 760).toFixed(1));
+    r.el.setAttribute('stroke-opacity', (0.30 * (1 - k)).toFixed(3));
+  }
+  f.d.wedge.setAttribute('transform', `rotate(${(t * 24).toFixed(1)} 1450 330)`);
+  f.d.wedge.setAttribute('opacity', (0.28 + 0.18 * Math.sin(t * 2)).toFixed(2));
+}));
+
+/* ---- 5 · Zeigarnik: open arcs breathing closed and re-opened along a chain ---- */
+fields.push(makeField(5, (f) => {
+  const g = mk('g', {}); f.svg.appendChild(g);
+  f.d.arcs = [];
+  for (let i = 0; i < 6; i++) {
+    const p = mk('path', { fill: 'none', stroke: i === 5 ? '#E11D48' : '#4F46E5', 'stroke-width': 2.2, 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke', opacity: 0.55 });
+    g.appendChild(p);
+    f.d.arcs.push({ el: p, cx: 300 + i * 260, cy: 540 + (i % 2 ? 130 : -130), r: 120 + (i % 3) * 40, sp: 0.5 + i * 0.13 });
+  }
+  const trail = mk('g', {}); g.appendChild(trail); f.d.trail = trail; f.d.dots = [];
+}, (f) => {
+  const t = f.t;
+  for (const a of f.d.arcs) {
+    const start = t * a.sp;
+    const span = Math.PI * (1.35 + 0.35 * Math.sin(t * 0.4 + a.cx));  // arc breathes → closes & re-opens
+    const end = start + span;
+    const x1 = a.cx + Math.cos(start) * a.r, y1 = a.cy + Math.sin(start) * a.r;
+    const x2 = a.cx + Math.cos(end) * a.r, y2 = a.cy + Math.sin(end) * a.r;
+    const large = span > Math.PI ? 1 : 0;
+    a.el.setAttribute('d', `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${a.r} ${a.r} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    a.el.setAttribute('opacity', (0.30 + 0.30 * Math.abs(Math.sin(t * 0.5 + a.cx))).toFixed(2));
+    if (Math.random() < 0.05) {
+      const d = mk('circle', { cx: x2, cy: y2, r: 3, fill: '#2563EB', opacity: 0.6 });
+      f.d.trail.appendChild(d); f.d.dots.push({ el: d, life: 1 });
+    }
+  }
+  f.d.dots = f.d.dots.filter((d) => {
+    d.life -= 0.015;
+    d.el.setAttribute('opacity', (d.life * 0.5).toFixed(2));
+    d.el.setAttribute('r', (3 + (1 - d.life) * 5).toFixed(1));
+    if (d.life <= 0) { d.el.remove(); return false; }
+    return true;
+  });
+}));
+
+/* ---- 6 · Micro-interactions: constellation of reactive perceptual dots ---- */
+fields.push(makeField(6, (f) => {
+  const lines = mk('g', {}), dots = mk('g', {});
+  f.svg.append(lines, dots);
+  f.d.pts = [];
+  for (let i = 0; i < 34; i++) {
+    const c = mk('circle', { r: 2 + (i % 3), fill: i % 6 === 0 ? '#E11D48' : (i % 3 === 0 ? '#4F46E5' : '#2563EB'), opacity: 0.4 });
+    dots.appendChild(c);
+    f.d.pts.push({ el: c, ox: 100 + Math.random() * 1720, oy: 80 + Math.random() * 920, ax: 30 + Math.random() * 70, ay: 24 + Math.random() * 60, sx: 0.25 + Math.random() * 0.5, sy: 0.2 + Math.random() * 0.5, ph: Math.random() * 6.28, x: 0, y: 0 });
+  }
+  f.d.lines = [];
+  for (let i = 0; i < 16; i++) {
+    const l = mk('line', { stroke: '#2563EB', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
+    lines.appendChild(l);
+    f.d.lines.push({ el: l, a: i * 2 % 34, b: (i * 5 + 3) % 34 });
+  }
+}, (f) => {
+  const t = f.t;
+  for (const p of f.d.pts) {
+    p.x = p.ox + Math.sin(t * p.sx + p.ph) * p.ax;
+    p.y = p.oy + Math.cos(t * p.sy + p.ph * 1.7) * p.ay;
+    p.el.setAttribute('cx', p.x.toFixed(1)); p.el.setAttribute('cy', p.y.toFixed(1));
+    p.el.setAttribute('opacity', (0.25 + 0.25 * Math.abs(Math.sin(t * 0.7 + p.ph))).toFixed(2));
+  }
+  for (const ln of f.d.lines) {
+    const a = f.d.pts[ln.a], b = f.d.pts[ln.b];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    ln.el.setAttribute('x1', a.x.toFixed(1)); ln.el.setAttribute('y1', a.y.toFixed(1));
+    ln.el.setAttribute('x2', b.x.toFixed(1)); ln.el.setAttribute('y2', b.y.toFixed(1));
+    ln.el.setAttribute('stroke-opacity', dist < 300 ? ((1 - dist / 300) * 0.30).toFixed(3) : '0');
+  }
+}));
+
+/* ---- 7 · Dark side: oscillating balance beam with sinking tension weights ---- */
+fields.push(makeField(7, (f) => {
+  const g = mk('g', {}); f.svg.appendChild(g);
+  const glow = mk('circle', { cx: 960, cy: 540, r: 300, fill: 'url(#coralGlow)', opacity: 0.6 });
+  const fulcrum = mk('path', { d: 'M 960 700 L 920 780 L 1000 780 Z', fill: 'none', stroke: '#4F46E5', 'stroke-opacity': 0.4, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' });
+  g.append(glow, fulcrum);
+  const beam = mk('g', {}); g.appendChild(beam);
+  const bar = mk('rect', { x: 460, y: 690, width: 1000, height: 10, rx: 5, fill: 'url(#rgA)' });
+  beam.appendChild(bar);
+  f.d.beam = beam;
+  f.d.weights = [];
+  for (let i = 0; i < 6; i++) {
+    const w = mk('rect', { x: 500 + i * 160, y: 700, width: 46, height: 26, rx: 7, fill: i < 3 ? '#2563EB' : '#E11D48', opacity: 0.28 });
+    beam.appendChild(w);
+    f.d.weights.push({ el: w, side: i < 3 ? -1 : 1, ph: i * 1.1 });
+  }
+  f.d.glow = glow;
+}, (f) => {
+  const t = f.t;
+  const tilt = Math.sin(t * 0.35) * 7 + Math.sin(t * 0.13) * 3;   // slow unstable seesaw
+  f.d.beam.setAttribute('transform', `rotate(${tilt.toFixed(2)} 960 695)`);
+  for (const w of f.d.weights) {
+    const sink = 700 + (18 + 10 * Math.sin(t * 0.6 + w.ph)) * (w.side > 0 ? (1 + tilt / 12) : (1 - tilt / 12));
+    w.el.setAttribute('y', sink.toFixed(1));
+    w.el.setAttribute('height', (26 + (w.side > 0 ? 14 + tilt : 14 - tilt)).toFixed(1));
+  }
+  f.d.glow.setAttribute('opacity', (0.35 + 0.25 * Math.abs(Math.sin(t * 0.3))).toFixed(2));
+}));
+
+/* ---- 8 · Synthesis: three tool-gears meshing and driving one output shaft ---- */
+fields.push(makeField(8, (f) => {
+  const defs = mk('defs', {}); f.svg.appendChild(defs);
+  const teeth = 14, R = 120, r = 96;
+  let gd = '';
+  for (let i = 0; i < teeth; i++) {
+    const a0 = (i / teeth) * Math.PI * 2, a1 = ((i + 0.45) / teeth) * Math.PI * 2, a2 = ((i + 0.55) / teeth) * Math.PI * 2, a3 = ((i + 1) / teeth) * Math.PI * 2;
+    gd += `${i ? 'L' : 'M'} ${(Math.cos(a0) * r).toFixed(1)} ${(Math.sin(a0) * r).toFixed(1)} L ${(Math.cos(a1) * R).toFixed(1)} ${(Math.sin(a1) * R).toFixed(1)} L ${(Math.cos(a2) * R).toFixed(1)} ${(Math.sin(a2) * R).toFixed(1)} L ${(Math.cos(a3) * r).toFixed(1)} ${(Math.sin(a3) * r).toFixed(1)} `;
+  }
+  const gear = mk('path', { id: 'gear-s8', d: gd + 'Z', fill: 'none', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' });
+  defs.appendChild(gear);
+  f.d.gears = [];
+  [[560, 420, 1], [900, 560, -1], [1240, 420, 1]].forEach((cfg, i) => {
+    const wrap = mk('g', {});
+    const u = mk('use', { href: '#gear-s8' });
+    u.setAttribute('stroke', ['#2563EB', '#4F46E5', '#E11D48'][i]);
+    u.setAttribute('stroke-opacity', '0.30');
+    const hub = mk('circle', { r: 14, fill: ['#2563EB', '#4F46E5', '#E11D48'][i], opacity: 0.35 });
+    wrap.append(u, hub);
+    f.svg.appendChild(wrap);
+    f.d.gears.push({ el: wrap, x: cfg[0], y: cfg[1], dir: cfg[2], off: i * 0.24 });
+  });
+  const shaft = mk('path', { d: 'M 1360 420 C 1520 420, 1560 540, 1720 540', fill: 'none', stroke: 'url(#rgC)', 'stroke-width': 2, 'stroke-dasharray': '6 10', 'vector-effect': 'non-scaling-stroke', opacity: 0.6 });
+  f.svg.appendChild(shaft);
+}, (f) => {
+  const t = f.t;
+  for (const gr of f.d.gears) {
+    gr.el.setAttribute('transform', `translate(${gr.x} ${gr.y}) rotate(${((t * 22 * gr.dir + gr.off * 360) % 360).toFixed(1)})`);
+  }
+}));
+
+/* ---- 9 · Blueprint: construction modules assembling themselves on a timeline ---- */
+fields.push(makeField(9, (f) => {
+  const base = mk('path', { d: 'M 120 860 H 1800', stroke: '#94A3B8', 'stroke-opacity': 0.35, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', fill: 'none' });
+  f.svg.appendChild(base);
+  f.d.mods = [];
+  for (let i = 0; i < 10; i++) {
+    const gmod = mk('g', {});
+    const rect = mk('rect', { x: -44, y: -30, width: 88, height: 60, rx: 10, fill: 'none', stroke: i % 3 ? '#2563EB' : '#4F46E5', 'stroke-width': 1.6, 'vector-effect': 'non-scaling-stroke', opacity: 0.4 });
+    const fillBar = mk('rect', { x: -44, y: 12, width: 88, height: 18, rx: 6, fill: i % 4 === 3 ? '#E11D48' : '#2563EB', opacity: 0.18 });
+    gmod.append(rect, fillBar);
+    f.svg.appendChild(gmod);
+    f.d.mods.push({ el: gmod, fill: fillBar, tx: 160 + i * 176, ph: i * 0.55 });
+  }
+  const crane = mk('path', { d: 'M 0 -120 L 0 0 M -40 -120 L 40 -120', stroke: '#4F46E5', 'stroke-opacity': 0.5, 'stroke-width': 2, fill: 'none', 'vector-effect': 'non-scaling-stroke' });
+  f.svg.appendChild(crane); f.d.crane = crane;
+}, (f) => {
+  const t = f.t;
+  for (const m of f.d.mods) {
+    const settle = (Math.sin(t * 0.5 + m.ph) + 1) / 2;
+    const y = 860 - 40 - settle * 260 - (m.ph % 1) * 30;
+    m.el.setAttribute('transform', `translate(${(m.tx + Math.sin(t * 0.3 + m.ph) * 4).toFixed(1)} ${y.toFixed(1)}) rotate(${(Math.sin(t * 0.4 + m.ph) * 3).toFixed(2)})`);
+    m.el.setAttribute('opacity', (0.45 + 0.4 * settle).toFixed(2));
+    m.fill.setAttribute('width', (20 + 68 * settle).toFixed(1));
+  }
+  f.d.crane.setAttribute('transform', `translate(${(960 + Math.sin(t * 0.35) * 760).toFixed(1)} ${(560 + Math.cos(t * 0.5) * 60).toFixed(1)})`);
+}));
+
+/* ---- 10 · Closing: converging speech bursts folding into one horizon line ---- */
+fields.push(makeField(10, (f) => {
+  const g = mk('g', {}); f.svg.appendChild(g);
+  const sun = mk('circle', { cx: 960, cy: 620, r: 90, fill: 'url(#attractorGlow)' });
+  const horizon = mk('path', { d: 'M 100 620 H 1820', stroke: 'url(#rgA)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', fill: 'none', opacity: 0.8 });
+  g.append(sun, horizon);
+  f.d.sun = sun;
+  f.d.bursts = [];
+  for (let i = 0; i < 9; i++) {
+    const u = mk('use', { href: '#sym-burst' });
+    u.setAttribute('stroke', ['#2563EB', '#4F46E5', '#E11D48'][i % 3]);
+    u.setAttribute('stroke-width', 1.6);
+    g.appendChild(u);
+    f.d.bursts.push({ el: u, ox: 180 + (i % 5) * 380, oy: 200 + Math.floor(i / 5) * 620 + (i % 3) * 60, sc: 0.6 + (i % 4) * 0.3, ph: i * 0.7 });
+  }
+}, (f) => {
+  const t = f.t;
+  for (const b of f.d.bursts) {
+    const k = ((t * 0.10 + b.ph * 0.31) % 1);
+    const x = lerp(b.ox, 960, k);
+    const y = lerp(b.oy, 620, k);
+    const sc = b.sc * (1 - k * 0.75);
+    b.el.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(t * 18 + b.ph * 40).toFixed(1)}) scale(${sc.toFixed(3)})`);
+    b.el.setAttribute('stroke-opacity', (0.42 * (1 - k) + 0.06).toFixed(3));
+  }
+  f.d.sun.setAttribute('r', (90 + Math.sin(t * 0.6) * 14).toFixed(1));
+}));
+
+function setActiveField(idx) {
+  fields.forEach((fl, i) => { if (!fl) return; if (i === idx) fl.start(); else fl.stop(); });
 }
 
 /* ---------------------------------------------------------------------------
@@ -1270,8 +1792,10 @@ function goTo(idx, opts) {
   });
   slideIndex = idx;
   setFocusForSlide(idx);
+  setActiveField(idx);
   updateHUD();
   onSlideEnter(idx);
+  if (!opts.silent) AudioEngine.play(goingForward ? 'forward' : 'back');
   if (!IS_REMOTE) publishNav(idx);
 }
 function next() { goTo(slideIndex + 1); }
@@ -1668,8 +2192,7 @@ function bootRemoteUI() {
    INIT
 --------------------------------------------------------------------------- */
 function init() {
-  buildField();
-  requestAnimationFrame(fieldLoop);
+  setActiveField(0);
   setFocusForSlide(0);
   buildRetentionBars();
   renderHook();
