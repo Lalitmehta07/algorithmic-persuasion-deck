@@ -220,16 +220,27 @@ i[data-lucide]{display:inline-flex;}
   box-shadow:var(--glass-shadow);
   padding:12px clamp(18px,1.8vw,30px) 11px;
 }
+/* FIX (PRIORITY 1 — ten-step segmented progress): one authoritative
+   implementation — exactly TOTAL segments generated once at init from the
+   slide index inside updateHUD(). The old single continuous #progress-fill
+   (fixed clip-path vs. JS scaleX conflict) has been removed entirely. */
 #progress-track{
-  width:clamp(220px,30vw,560px);height:7px;border-radius:99px;
-  background:rgba(148,163,184,0.25);overflow:hidden;position:relative;
+  width:clamp(220px,30vw,560px);height:7px;
+  display:flex;gap:4px;align-items:stretch;
 }
-#progress-fill{
-  position:absolute;inset:0;border-radius:99px;
-  background:linear-gradient(90deg,var(--cobalt) 0%,var(--indigo) 70%,var(--coral) 130%);
-  transform-origin:left center;transform:scaleX(0.1);
-  transition:transform 0.55s var(--slide-ease);
-  will-change:transform;backface-visibility:hidden;
+.pseg{
+  flex:1 1 0;min-width:0;border-radius:99px;background:rgba(148,163,184,0.25);
+  transform:translateZ(0);backface-visibility:hidden;
+  transition:background-color 0.45s ease, box-shadow 0.45s ease;
+}
+.pseg.done{background:linear-gradient(90deg,var(--cobalt),var(--indigo));}
+.pseg.current{
+  background:linear-gradient(90deg,var(--indigo),var(--coral));
+  box-shadow:0 0 0 1px rgba(79,70,229,0.22), 0 2px 8px rgba(79,70,229,0.32);
+}
+@media (max-width:900px){
+  #progress-dock{max-width:calc(100dvw - 24px);}
+  #topbar{flex-wrap:wrap;justify-content:flex-end;max-width:calc(100dvw - 24px);}
 }
 #progress-telemetry{
   font-family:var(--font-mono);font-size:clamp(10px,0.72vw,14px);
@@ -314,6 +325,14 @@ body.presenter-click .clickzone{opacity:1;}
   border-radius:50%;padding:5px;background:conic-gradient(from 140deg,var(--cobalt),var(--indigo),var(--coral),var(--cobalt));
   box-shadow:0 14px 34px rgba(37,99,235,0.22);
 }
+/* gentle static halo pulse — opacity-only keyframes (GPU-composited, no repaint) */
+#s1 .avatar-ring::after{
+  content:"";position:absolute;inset:-8px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(37,99,235,0.20),rgba(79,70,229,0.06) 60%,transparent 75%);
+  animation:avatarHalo 4.5s ease-in-out infinite;z-index:-1;
+}
+@keyframes avatarHalo{0%,100%{opacity:0.45;}50%{opacity:1;}}
+@media (prefers-reduced-motion:reduce){#s1 .avatar-ring::after{animation:none;}}
 #s1 .avatar-core{
   width:100%;height:100%;border-radius:50%;overflow:hidden;background:var(--white);
   display:flex;align-items:center;justify-content:center;
@@ -1089,7 +1108,7 @@ body.remote-mode #remote-ui{display:flex;flex-direction:column;gap:clamp(14px,2.
 
 <!-- =================== HUD : BOTTOM-CENTER PROGRESS DOCK =================== -->
 <div class="hud" id="progress-dock" role="group" aria-label="Progression">
-  <div id="progress-track"><div id="progress-fill"></div></div>
+  <div id="progress-track" aria-hidden="true"><!-- TOTAL segments built once at init --></div>
   <div id="progress-telemetry" aria-live="polite">Slide <b id="tel-x">1</b> of 10 • <span id="tel-left">9 slides left</span></div>
 </div>
 
@@ -1191,28 +1210,58 @@ let roomTopic = params.get('room') ? params.get('room') : 'qinfinity/lalit/algo-
    BGM pad. Both independently toggleable; persisted in localStorage.
 --------------------------------------------------------------------------- */
 const AudioEngine = (() => {
-  let ctx = null, master = null, wet = null, convolver = null, noiseBuf = null, bgmBus = null;
-  let bgmOn = true, sfxOn = true, bgmPlaying = false, bgmTimer = null, nextBellAt = 0;
-  try { bgmOn = localStorage.getItem('ap-bgm') !== 'off'; } catch (e) {}
+  /* FIX (PRIORITY 2 — complete BGM mute): strict two-bus audio graph.
+       SFX path : voices -> sfxDry -> sfxBus ------------------> master
+                \-> sfxWet -> convolver -> sfxWetGain -/
+       BGM path : voices -> bgmDry -> bgmBus ------------------> master
+                \-> bgmWet -> convolver -> bgmWetGain -> bgmBus -/
+     Every ambient source AND its reverb return now terminates behind
+     bgmBus, so muting BGM silences pad, bells, noise layer, reverb tail
+     and every future-scheduled note. SFX has its own parallel convolver
+     send behind sfxBus — the two mutes are fully independent. */
+  let ctx = null, master = null, noiseBuf = null;
+  let bgmBus = null, bgmDry = null, bgmWet = null, bgmConv = null, bgmWetGain = null;
+  let sfxBus = null, sfxDry = null, sfxWet = null, sfxConv = null, sfxWetGain = null;
+  /* FIX: BGM defaults to OFF unless explicitly enabled previously — an
+     unrelated first gesture can never silently start the music */
+  let bgmOn = false, sfxOn = true, bgmPlaying = false, bgmTimer = null, nextBellAt = 0;
+  let bgmNodes = [];
+  let bgmVol = 0.55, sfxVol = 0.8;
+  try { const v = parseFloat(localStorage.getItem('ap-bgmvol')); if (!isNaN(v)) bgmVol = clamp(v, 0, 1); } catch (e) {}
+  try { const v = parseFloat(localStorage.getItem('ap-sfxvol')); if (!isNaN(v)) sfxVol = clamp(v, 0, 1); } catch (e) {}
+  try { bgmOn = localStorage.getItem('ap-bgm') === 'on'; } catch (e) {}
   try { sfxOn = localStorage.getItem('ap-sfx') !== 'off'; } catch (e) {}
 
-  function ensure() {
-    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return true; }
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return false;
-    ctx = new AC();
-    master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+  function makeReverb() {
     /* lightweight generated reverb (2.8s stereo decaying noise IR) */
-    convolver = ctx.createConvolver();
-    wet = ctx.createGain(); wet.gain.value = 0.34;
+    const cv = ctx.createConvolver();
     const len = Math.floor(ctx.sampleRate * 2.8);
     const ir = ctx.createBuffer(2, len, ctx.sampleRate);
     for (let ch = 0; ch < 2; ch++) {
       const d = ir.getChannelData(ch);
       for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.4);
     }
-    convolver.buffer = ir; convolver.connect(wet); wet.connect(master);
+    cv.buffer = ir;
+    return cv;
+  }
+  function ensure() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return true; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    try { ctx = new AC(); } catch (e) { return false; }
+    master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+    /* --- BGM chain: everything ambient terminates through bgmBus --- */
     bgmBus = ctx.createGain(); bgmBus.gain.value = 0.0001; bgmBus.connect(master);
+    bgmDry = ctx.createGain(); bgmDry.gain.value = 1; bgmDry.connect(bgmBus);
+    bgmWet = ctx.createGain(); bgmWet.gain.value = 0.34;
+    bgmConv = makeReverb(); bgmWetGain = ctx.createGain(); bgmWetGain.gain.value = 1;
+    bgmWet.connect(bgmConv); bgmConv.connect(bgmWetGain); bgmWetGain.connect(bgmBus);
+    /* --- SFX chain: independent dry + dedicated reverb send behind sfxBus --- */
+    sfxBus = ctx.createGain(); sfxBus.gain.value = sfxVol; sfxBus.connect(master);
+    sfxDry = ctx.createGain(); sfxDry.gain.value = 1; sfxDry.connect(sfxBus);
+    sfxWet = ctx.createGain(); sfxWet.gain.value = 0.34;
+    sfxConv = makeReverb(); sfxWetGain = ctx.createGain();
+    sfxWet.connect(sfxConv); sfxConv.connect(sfxWetGain); sfxWetGain.connect(sfxBus);
     /* shared white-noise buffer for airy/swish layers */
     const nlen = Math.floor(ctx.sampleRate * 1.2);
     noiseBuf = ctx.createBuffer(1, nlen, ctx.sampleRate);
@@ -1221,16 +1270,40 @@ const AudioEngine = (() => {
     return true;
   }
 
+  function stopBGM() {
+    bgmPlaying = false;
+    if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+    if (!ctx) { bgmNodes = []; return; }
+    const t = ctx.currentTime;
+    /* 1. fade the ENTIRE BGM output (dry + reverb returns ride on bgmBus) */
+    try {
+      bgmBus.gain.cancelScheduledValues(t);
+      bgmBus.gain.setValueAtTime(Math.max(bgmBus.gain.value, 0.0001), t);
+      bgmBus.gain.linearRampToValueAtTime(0.0001, t + 0.6);
+    } catch (e) {}
+    /* 2/3. stop every live or future-scheduled ambient node, then drop refs */
+    bgmNodes.forEach((n) => {
+      try { if (n.stop) n.stop(t + 0.7); } catch (e) {}
+      try { if (n.disconnect) n.disconnect(); } catch (e) {}
+    });
+    bgmNodes = [];
+  }
+
   const now = () => ctx.currentTime;
+  function reg(node) { bgmNodes.push(node); return node; }
   function tone(freq, t0, dur, type, vol, glideTo, bus) {
     const o = ctx.createOscillator(), g = ctx.createGain();
+    const isBgm = (bus === bgmBus);
+    if (isBgm) reg(o);
     o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, t0);
     if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t0 + dur);
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g); g.connect(bus || master); g.connect(convolver);
+    o.connect(g);
+    g.connect(isBgm ? bgmDry : sfxDry);          /* dry path stays behind its bus */
+    g.connect(isBgm ? bgmWet : sfxWet);          /* reverb SEND — return also lands on the same bus */
     o.start(t0); o.stop(t0 + dur + 0.05);
   }
   function noiseHit(t0, dur, f0, f1, vol, q) {
@@ -1242,7 +1315,8 @@ const AudioEngine = (() => {
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(bp); bp.connect(g); g.connect(master); g.connect(convolver);
+    src.connect(bp); bp.connect(g);
+    g.connect(sfxDry); g.connect(sfxWet);
     src.start(t0); src.stop(t0 + dur + 0.05);
   }
 
@@ -1266,6 +1340,20 @@ const AudioEngine = (() => {
     try { SFX[name] && SFX[name](); } catch (e) {}
   }
 
+  /* FIX (action sounds not working): iOS/Android Chrome silently suspends the
+     AudioContext unless it is created/resumed INSIDE a real user-gesture task.
+     The old one-shot unlock listener was consumed by any first pointerdown —
+     including taps that hit a <button>, whose click handler then fired in a
+     separate, non-gesture task, leaving ctx permanently "suspended" and every
+     action sound inaudible. This dedicated synchronous listener re-arms on
+     every gesture for the whole session (zero cost once running). */
+  window.addEventListener('pointerdown', () => {
+    try { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); } catch (e) {}
+  }, true);
+  window.addEventListener('keydown', () => {
+    try { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); } catch (e) {}
+  }, true);
+
   /* ---- ambient generative BGM: warm detuned pad + sparse bell rain ---- */
   const PENTA = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
   function startBGM() {
@@ -1282,8 +1370,8 @@ const AudioEngine = (() => {
         const lfo = ctx.createOscillator(); lfo.frequency.value = 0.045 + i * 0.017;
         const lg = ctx.createGain(); lg.gain.value = 0.011;
         lfo.connect(lg); lg.connect(g.gain); lfo.start();
-        o.connect(lp); lp.connect(g); g.connect(bgmBus); g.connect(convolver);
-        o.start();
+        o.connect(lp); lp.connect(g); g.connect(bgmDry); g.connect(bgmWet);
+        o.start(); reg(o); reg(lfo);
       });
     });
     const air = ctx.createBufferSource(); air.buffer = noiseBuf; air.loop = true;
@@ -1293,13 +1381,15 @@ const AudioEngine = (() => {
     const alfo = ctx.createOscillator(); alfo.frequency.value = 0.07;
     const alg = ctx.createGain(); alg.gain.value = 320;
     alfo.connect(alg); alg.connect(abp.frequency); alfo.start();
-    air.connect(abp); abp.connect(ag); ag.connect(bgmBus); ag.connect(convolver);
-    air.start();
+    /* FIX: noise layer routes through the BGM dry/wet sends — never a shared
+       convolver that could bypass bgmBus and keep ringing after mute */
+    air.connect(abp); abp.connect(ag); ag.connect(bgmDry); ag.connect(bgmWet);
+    air.start(); reg(air); reg(alfo);
     nextBellAt = now() + 4;
     bgmTimer = setInterval(scheduleBells, 1500);
   }
   function scheduleBells() {
-    if (!ctx || !bgmOn) return;
+    if (!ctx || !bgmOn || !bgmPlaying) return;
     while (nextBellAt < ctx.currentTime + 2) {
       const f = PENTA[Math.floor(Math.random() * PENTA.length)];
       tone(f, nextBellAt, 2.6, 'sine', 0.035 + Math.random() * 0.02, null, bgmBus);
@@ -1307,23 +1397,56 @@ const AudioEngine = (() => {
       nextBellAt += 3.5 + Math.random() * 6;
     }
   }
+  /* FIX: mute tears down EVERYTHING ambient (nodes, scheduler, reverb tail via
+     the bus fade). Re-enable recreates cleanly — startBGM guards against
+     duplicate schedulers/oscillators via bgmPlaying, and stopBGM clears it. */
   function setBGM(on) {
     bgmOn = on;
     try { localStorage.setItem('ap-bgm', on ? 'on' : 'off'); } catch (e) {}
-    if (on) { startBGM(); if (ctx && bgmBus) bgmBus.gain.linearRampToValueAtTime(1, now() + 1.4); }
-    else if (ctx && bgmBus) bgmBus.gain.linearRampToValueAtTime(0.0001, now() + 0.8);
+    if (on) {
+      if (!ensure()) return;
+      startBGM();
+      if (bgmBus) {
+        bgmBus.gain.cancelScheduledValues(now());
+        bgmBus.gain.setValueAtTime(Math.max(bgmBus.gain.value, 0.0001), now());
+        bgmBus.gain.linearRampToValueAtTime(Math.max(bgmVol, 0.0001), now() + 1.4);
+      }
+    } else stopBGM();
   }
   function setSFX(on) {
     sfxOn = on;
     try { localStorage.setItem('ap-sfx', on ? 'on' : 'off'); } catch (e) {}
   }
+  /* FIX (BGM volume slider): live, persisted gain control for both buses */
+  function setBGMVolume(v) {
+    bgmVol = clamp(v, 0, 1);
+    try { localStorage.setItem('ap-bgmvol', String(bgmVol)); } catch (e) {}
+    if (ctx && bgmBus && bgmOn) {
+      bgmBus.gain.cancelScheduledValues(now());
+      bgmBus.gain.setValueAtTime(Math.max(bgmBus.gain.value, 0.0001), now());
+      bgmBus.gain.linearRampToValueAtTime(Math.max(bgmVol, 0.0001), now() + 0.12);
+    }
+  }
+  function setSFXVolume(v) {
+    sfxVol = clamp(v, 0, 1);
+    try { localStorage.setItem('ap-sfxvol', String(sfxVol)); } catch (e) {}
+    if (ctx && sfxBus) {
+      sfxBus.gain.cancelScheduledValues(now());
+      sfxBus.gain.setValueAtTime(sfxVol, now());
+    }
+  }
   function unlock() {
-    if (!ensure()) return;
-    if (bgmOn) { startBGM(); bgmBus.gain.linearRampToValueAtTime(1, now() + 2.5); }
+    /* FIX: gesture-unlock only resumes the AudioContext; it never starts or
+       re-starts BGM behind the user's back. Music begins ONLY via setBGM(true) */
+    ensure();
   }
   return {
-    play, unlock, setBGM, setSFX,
+    play, unlock, setBGM, setSFX, setBGMVolume, setSFXVolume,
     isBGM: () => bgmOn, isSFX: () => sfxOn,
+    getBGMVolume: () => bgmVol, getSFXVolume: () => sfxVol,
+    /* telemetry for regression tests: live ambient node count + scheduler id */
+    _bgmNodeCount: () => bgmNodes.length,
+    _bgmTimerActive: () => bgmTimer !== null,
     /* phonetic readout of the presenter's name — Web Speech API */
     pronounce() {
       try {
@@ -1427,6 +1550,20 @@ function makeField(n, build, step) {
 }
 
 const fields = [];
+
+/* FIX (live-deck crash): setFocusForSlide was called by goTo()/init() but its
+   definition had been lost in an earlier edit — every navigation threw a
+   ReferenceError, killing transitions, HUD updates and MQTT publishing.
+   Restored as a no-op safe focus guard: never steals focus from an active
+   text input, otherwise blurs any stuck button focus so HID keyboards keep
+   delivering keys to the window-level navigation listeners. */
+function setFocusForSlide(idx) {
+  try {
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    if (ae && typeof ae.blur === 'function' && ae !== document.body) ae.blur();
+  } catch (e) {}
+}
 
 /* ---- 1 · Title: attention ribbons converging on an algorithmic attractor ---- */
 fields.push(makeField(1, (f) => {
@@ -1804,7 +1941,11 @@ function prev() { goTo(slideIndex - 1); }
 function updateHUD() {
   const x = slideIndex + 1;
   $('#chip-num').textContent = String(x).padStart(2, '0');
-  $('#progress-fill').style.transform = `scaleX(${x / TOTAL})`;
+  /* segmented dock: single authoritative state pass driven by slideIndex */
+  $$('#progress-track .pseg').forEach((el, i) => {
+    el.classList.toggle('done', i < slideIndex);
+    el.classList.toggle('current', i === slideIndex);
+  });
   $('#tel-x').textContent = x;
   $('#tel-left').textContent = (x === TOTAL) ? 'Final Slide' : ((TOTAL - x) + ' slides left');
   const mini = $('#mini-prog-fill'); if (mini) mini.style.transform = `scaleX(${x / TOTAL})`;
@@ -2192,6 +2333,15 @@ function bootRemoteUI() {
    INIT
 --------------------------------------------------------------------------- */
 function init() {
+  /* build the ten progress segments once, from TOTAL — single source of truth */
+  const track = $('#progress-track');
+  if (track && !track.children.length) {
+    for (let i = 0; i < TOTAL; i++) {
+      const s = document.createElement('span');
+      s.className = 'pseg';
+      track.appendChild(s);
+    }
+  }
   setActiveField(0);
   setFocusForSlide(0);
   buildRetentionBars();
