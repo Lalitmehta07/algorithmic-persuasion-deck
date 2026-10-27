@@ -1,0 +1,340 @@
+MASTER REPAIR PROMPT — ALGORITHMIC PERSUASION
+
+You are continuing work on my existing single-file HTML presentation, “Algorithmic Persuasion: How Short-Form Feeds Rewire Human Communication & Attention.”
+
+I have made several iterations already. The latest version contains partial fixes, but some requirements are still unmet. Use the latest "index.html" as the source of truth.
+
+Absolute requirements
+
+Make the changes directly to the existing presentation. Do not merely audit it, give me suggestions, or write a new prompt.
+
+Do not rebuild the deck from scratch. Do not replace the design with a generic slideshow. Preserve the existing ten slides, visual identity, content hierarchy, layout, colours, typography, animations, generative SVG fields, glassmorphism, neumorphism, navigation, fullscreen functionality, MQTT presenter remote, runtime telemetry, pronunciation control, and interactive hook comparator.
+
+Make targeted changes, preserve existing working functionality, and do not make unrelated refactors. Stability for an upcoming live presentation is more important than adding features.
+
+PRIORITY 1 — Fix the segmented presentation progress indicator
+
+The latest code still contains one "#progress-fill" inside "#progress-track". Its CSS applies a fixed "clip-path: inset(0 90% ...)", while "updateHUD()" continues setting "transform: scaleX(x / TOTAL)". This does not implement the requested ten-step progress display.
+
+Required result
+
+Replace the single continuous main progress fill with exactly ten distinct segments, one for each slide.
+
+- Use visible gaps or separator lines so every segment is recognisable as a separate step.
+- Preserve the existing bottom-centre glassmorphic dock, sizing, position, colours and typography.
+- Use the existing cobalt, indigo and coral colour palette.
+- Make completed, current and upcoming segments visually distinguishable.
+- Keep transitions smooth and subtle.
+- On slide 1, highlight the first segment.
+- On slide 5, show five completed/current steps and five remaining steps, with the current step distinguishable.
+- On slide 10, display all ten completed steps.
+- Keep the text counter and remaining-slide count accurate, including the final slide.
+
+Implementation requirements
+
+Inspect "#progress-track", "#progress-fill", "updateHUD()", "goTo()", "slideIndex", "TOTAL" and the initialisation sequence.
+
+Remove conflicting progress implementations rather than layering a second bar on top of the existing one. You may create the segment elements from "TOTAL" once during initialisation or declare ten segments in the HTML, but use a single authoritative implementation.
+
+Update the segment states from the current slide index through the central HUD update function. Ensure that the main progress display, slide-number chip, presentation telemetry, phone remote and existing miniature progress visualisation remain consistent.
+
+Test next/previous buttons, keyboard navigation, direct slide jumps, touch/swipe navigation, remote navigation and replay from slide 1. Do not change slide content or animation timing merely to make progress update.
+
+PRIORITY 2 — Actually fix the ambient music mute bug
+
+The latest "AudioEngine" includes a "bgmNodes" registry and "stopBGM()", but the audio routing is still incomplete.
+
+In "tone()", audio is connected to the selected bus and directly to "convolver". In "startBGM()", the sustained pad and noise layers also connect directly to "convolver". This allows reverberated audio to bypass the BGM master control.
+
+Required result
+
+When BGM is switched off, all ambient music must become silent, including the sustained pad, bell notes, noise layer, reverb and notes that were scheduled for the future.
+
+Inspect and repair:
+
+- "ensure()"
+- "tone()"
+- "noiseHit()"
+- "startBGM()"
+- "scheduleBells()"
+- "stopBGM()"
+- "setBGM(on)"
+- "unlock()"
+- All BGM and SFX event listeners.
+- The BGM and SFX state, gain and node-cleanup logic.
+
+Implement a reliable audio graph with independent master-controlled BGM and SFX paths. Dry audio and reverb returns must pass through their respective mute controls; neither must bypass its master gain through a shared output path.
+
+When BGM is switched off:
+
+1. Fade the entire BGM output to silence quickly and smoothly.
+2. Cancel the bell scheduler and prevent new ambient notes from being generated.
+3. Stop or cancel active and future-scheduled BGM nodes.
+4. Ensure its reverb tail is also silenced through the BGM-controlled output path.
+5. Clean up stopped audio nodes and avoid accumulating references or timers.
+
+When BGM is switched back on, resume or recreate the audio smoothly without duplicate schedulers, oscillators or animation loops.
+
+Audio behaviour and controls
+
+- Default BGM to OFF for this presentation unless the presenter explicitly enables it.
+- Do not automatically start music on the first unrelated pointer, keyboard or touch gesture. An audio-unlock handler may resume the audio context when permitted by the browser, but it must not override the user's BGM preference.
+- Persist explicit choices reliably if appropriate.
+- Keep SFX independently controllable. Muting BGM must not mute SFX, and muting SFX must not mute BGM.
+- Ensure the icons, muted styling, tooltips, accessible names and "aria-pressed" values match the actual states.
+- Avoid playing a toggle sound when SFX is disabled.
+- Handle browsers where "AudioContext" is unavailable or suspended without breaking navigation.
+
+Do not simply reduce the volume, hide the button or clear only the interval. Repair the actual audio routing and lifecycle.
+
+PRIORITY 3 — Apply the scientific and factual corrections to the slides
+
+Keep the ten-slide narrative and the current concise, visual presentation style. Correct the claims that are unsupported, overly absolute or misleading. Do not turn the presentation into a lengthy academic lecture.
+
+Use the existing elements and components wherever possible. Update text in the HTML, JavaScript data structures, speaker cues, labels, interactive comparisons and remote UI wherever the same claim appears. Do not correct a visible slide while leaving its contradictory version in the speaker cues.
+
+Slide 1 — Algorithmic Persuasion
+
+The current file shows:
+
+- "Mean Visual Fixation"
+- "2004 · 12.0s"
+- "2012 · 8.0s"
+- "2026 · 2.7s"
+- A claim that the counter's nine-second cycle represents exactly how long the slide will hold the audience.
+- A speaker cue saying that twelve seconds was the human baseline in 2004.
+
+These historical figures must not be presented as an established timeline of universal human attention spans.
+
+Preserve the animated counter and its visual role if feasible, but label it clearly as an illustrative attention simulation, not empirical data. Remove the year labels that imply the displayed values are historical measurements. Reword the heading so it does not imply that these numbers are measured mean visual fixation values.
+
+Replace the counter note with concise language explaining that it illustrates attention or rapid switching metaphorically. Update the Slide 1 remote cue so it never describes twelve seconds as a proven human baseline.
+
+Do not introduce replacement numerical claims unless their source and scope are verified.
+
+Slide 2 — The Linear Storytelling Collapse
+
+The current text makes categorical claims involving ten thousand years, an under-800-millisecond decision, 15–60-second content packets, and the claim that feed-conditioned cognition rejects traditional storytelling.
+
+Reframe the slide as a comparison of communication tendencies and platform incentives, rather than universal laws about human cognition.
+
+- Avoid unqualified historical claims.
+- Remove the unsupported fixed 800 ms threshold or describe the first moments of communication more generally.
+- Present short segments as a tendency of some feed formats, not a universal limit on comprehension.
+- Reword the comparison between legacy communication and feeds so neither side is caricatured.
+- Keep the panels, icons, visual comparison and friction meters.
+- Clearly identify the friction values "0.82" and "0.11" as illustrative comparison scores if they are not derived from a documented measurement.
+
+Keep the core point: communication structure should adapt to the medium without assuming audiences are incapable of sustained thought.
+
+Slide 3 — The Dopamine and Prediction-Error Loop
+
+The current subtitle says that dopamine does not encode pleasure and only encodes prediction error. Other text states that randomised reward timing maximises prediction error and that a specific reinforcement schedule is the most extinction-resistant schedule known.
+
+These statements are too absolute.
+
+Replace the opening explanation with a concise, accurate account: dopamine signalling contributes to reward learning, motivation and other processes; reward-prediction error is an important model of some dopamine signals, not the entirety of dopamine function.
+
+Keep the four-stage flow and animated reward loop, but describe them as a simplified explanatory model of possible engagement mechanisms, not a universal neurological sequence that happens identically on every scroll.
+
+Qualify the descriptions of sensory interruption, curiosity gaps, variable rewards and automatic scrolling. Avoid asserting that every withheld detail automatically causes the brain to seek closure.
+
+Replace “Randomised reward timing maximises error” with a qualified explanation of how unexpected outcomes can produce prediction errors. Replace claims about the most extinction-resistant schedule with a suitably qualified statement about some forms of intermittent reinforcement.
+
+Update the Slide 3 speaker cue accordingly.
+
+Use this source to check the scientific wording:
+https://www.nature.com/articles/s41583-024-00898-8
+
+Slide 4 — The 3-Second Visual and Semantic Hook
+
+The current strong-hook example says the viewer's attention span is shorter than a goldfish's measured baseline. Remove this claim. Do not invent a replacement attention-span statistic.
+
+Replace the strong opening with a compelling line relevant to the actual presentation, such as an opening about earning an audience's attention before asking for it. It should be provocative without relying on a misleading comparison.
+
+Keep the interactive Hook Comparator and the contrast between passive and stakes-first openings.
+
+The current "HOOKS" data contains 18% and 87% retention values, presented beside a simulated-retention label. Retain these values only if the interface makes it unmistakable that they are illustrative demonstration values, not results from an actual experiment or audience study.
+
+Remove the claim that conflict-first openings retain approximately 3.2 times longer unless a verifiable, relevant source is available. Do not fabricate supporting research.
+
+Keep the timing strips as illustrative script annotations, not experimentally measured attention thresholds.
+
+Slide 5 — Progressive Disclosure and Pacing Architecture
+
+The current slide states that unfinished tasks occupy working memory until closed, displays “90% vs 55%” recall figures, and suggests that these figures establish the effectiveness of open loops.
+
+Remove the "90% vs 55%" figures unless their specific original source can be verified. Do not invent a replacement statistic.
+
+Explain the distinction between unfinished tasks encouraging resumption and unfinished tasks reliably improving memory. The latter is not a general rule.
+
+Update the subtitle to something concise, such as:
+
+“Unfinished tasks can encourage resumption, but they do not guarantee better recall. Use open loops to structure a message—and show the audience where they are.”
+
+Preserve the open-loop illustration, the list of loops in this talk, the pacing architecture and the progress-bar self-reference.
+
+The self-reference currently describes the progress dock as segmented and live. Make sure the final progress dock really is segmented before retaining that wording.
+
+A relevant source for fact-checking this slide is the 2025 meta-analysis:
+https://www.nature.com/articles/s41599-025-05000-w
+
+Slide 6 — Micro-Interactions and Multi-Sensory Anchoring
+
+The current subtitle says that the orienting response fires at every novel state change and must be re-triggered every 15–20 seconds to remain below a working-memory overload threshold.
+
+These are not universal scientific rules.
+
+Keep the kinetic typography, spatial depth, visual state-change cards and animated demonstration.
+
+Present the 15–20-second timing as a design heuristic used in this demo, not a proven attention threshold. Explain that meaningful visual changes can help redirect attention, while excessive or irrelevant animation can distract.
+
+Change the kinetic-demo caption so it describes the salience of change without claiming that every changing field is impossible to ignore or that an orienting reflex excludes curiosity.
+
+Keep the countdown functional; only change its wording if needed to make the heuristic clear.
+
+Slide 7 — Signal Compression vs. Cognitive Shallowing
+
+The current slide presents several relationships as universal: that every increase in engagement velocity reduces nuance, that statistical thinking loses to anecdotes, and that people remember frames rather than facts.
+
+Keep the existing four-column comparison table and ethical conclusion, but soften absolute language.
+
+Express these points as risks and trade-offs:
+
+- Fast formats can reward simple, decisive claims but may leave less space for qualifications.
+- Vivid anecdotes can overshadow representative data when evidence is poorly contextualised.
+- High-arousal material can spread readily in some settings, but this is not a universal rule for all content.
+- Simplified or shallow processing may weaken understanding; the effect depends on the material and the audience.
+- Framing may influence what people remember, but it does not mean that facts are never remembered.
+
+Retain the argument that communicators should use speed to lead audiences towards depth rather than replace depth.
+
+Slide 8 — Hijacking the Feed Rules for Deep Ideas
+
+Keep the three practical principles:
+
+1. Front-load the stakes.
+2. Use meaningful visual state changes.
+3. Present one core metric or claim per frame.
+
+The current rule about a visual state change every 60 seconds and the claim about working memory holding roughly four chunks must be presented as practical design heuristics, not universal laws guaranteeing retention.
+
+Use wording that allows the timing and information density to vary with the audience, task and complexity of the material.
+
+Consider changing the title to “Adapting the Feed Rules for Deep Ideas” to make the ethical intent clearer. Preserve the current layout and visual hierarchy.
+
+Slide 9 — The 10-Minute Blueprint
+
+Retain the before-and-after table, timing structure and practical recommendations.
+
+Reword the description so the blueprint is presented as an example of ethical communication design rather than a proven sequence that guarantees audience retention or comprehension.
+
+Preserve the core principle: front-load relevance, make progress visible, organise the narrative coherently and close the loops that were opened.
+
+Slide 10 — Closing Synthesis
+
+Retain the closing slide, the three pillars (Hook, Loop and Anchor), the runtime telemetry, the Q&A invitation and remote/replay buttons.
+
+Change the opening thesis from:
+
+“Attention is not the resource being competed for. Behaviour is.”
+
+to:
+
+“Attention is not the only resource being competed for. Behaviour is, too.”
+
+Keep the memorable tone and ethical emphasis. Make no unnecessary layout changes.
+
+Evidence and citations
+
+Never invent references, authors, studies, experimental results or numerical values.
+
+Relevant starting sources:
+
+- American Psychological Association interview with Gloria Mark on screen attention and task switching: https://www.apa.org/news/podcasts/speaking-of-psychology/attention-spans?country=83
+- Kahnt and Schoenbaum, Nature Reviews Neuroscience (2025): https://www.nature.com/articles/s41583-024-00898-8
+- Ghibellini and Meier, Humanities and Social Sciences Communications (2025): https://www.nature.com/articles/s41599-025-05000-w
+- BBC discussion of the provenance problems with the human/goldfish attention-span comparison: https://downloads.bbc.co.uk/learningenglish/features/6min/170518_6min_english_attention_span.pdf
+
+Use sources only for the claims they actually support. In particular, research on time spent on a screen before switching tasks must not be recast as a universal measure of a person's maximum attention span.
+
+Where a specific empirical claim remains, add a small, unobtrusive source note in the relevant slide if appropriate. Do not add an entire bibliography page or allow citations to crowd the design. When a claim is unsourced, qualify it, label it illustrative, or remove it.
+
+PRIORITY 4 — Preserve and verify the existing interactive behaviour
+
+Keep all working features, including:
+
+- Ten-slide navigation and animated transitions.
+- Keyboard, touch and button navigation.
+- Direct slide jumps and presenter click zones.
+- Fullscreen control.
+- The phone remote and MQTT navigation.
+- Slide chip, telemetry, runtime timer and speaker cues.
+- Interactive Hook Comparator.
+- Kinetic typography demo and generated SVG backgrounds.
+- Name pronunciation and existing SFX.
+
+Make sure the HTML, CSS and JavaScript agree on element IDs and state.
+
+Avoid duplicate event handlers, duplicate audio schedulers and conflicting CSS animation mechanisms. Preserve keyboard input in the room field and other controls rather than intercepting every key as navigation.
+
+The main progress display must be segmented; the phone remote's own progress display may remain a simpler bar provided it stays accurate and synchronised.
+
+Keep the current light porcelain palette, cobalt/indigo/coral accents, typography, glassmorphic dock and overall presentation proportions.
+
+PRIORITY 5 — Minimal quality-of-life improvements
+
+Only add improvements that directly improve live reliability.
+
+- Respect reduced-motion settings.
+- Keep keyboard focus visible.
+- Ensure the previous and next buttons behave correctly at the first and final slides.
+- Make replay reset navigation and progress displays correctly.
+- Prevent small-screen clipping of the progress dock and audio buttons.
+- Ensure audio controls and their accessible states accurately reflect whether the respective bus is enabled.
+- Handle unavailable audio and MQTT APIs gracefully without crashing slide navigation.
+- Keep animations and audio scheduling lightweight.
+
+Do not add new libraries or features merely for the sake of adding them.
+
+FINAL VALIDATION — DO NOT SKIP
+
+Before finishing, inspect the actual final code, not just the intended changes.
+
+Progress test
+
+- Confirm there are exactly ten separate visual segments.
+- Confirm the displayed step matches slide 1, slide 5 and slide 10.
+- Confirm navigation updates all relevant indicators.
+- Confirm replay returns the progress display to slide 1.
+
+Audio test
+
+- Turn BGM on, then turn it off mid-note.
+- Verify that no ambient sound or BGM reverb tail continues after the mute transition.
+- Toggle BGM on and off repeatedly and verify no duplicate intervals or lingering notes.
+- Confirm SFX continues to work independently when enabled.
+- Confirm an unrelated first click or keyboard interaction does not silently re-enable BGM.
+
+Content test
+
+- Search the final HTML and JavaScript for the old claims and statistics specified above.
+- Check all speaker cues and remote text for contradictions.
+- Verify that the goldfish comparison, the unsupported 3.2× retention claim, and the unsupported 90% vs 55% recall claim are gone or handled exactly as instructed.
+- Check that every retained numerical claim is either properly sourced and contextualised or explicitly identified as illustrative.
+
+Code test
+
+Check syntax, duplicated IDs and event listeners.
+Verify that the initial slide loads, all ten slides can be navigated, the hook comparator works, remote navigation updates the main deck, and replay works.
+If a browser preview or actual runtime is unavailable, do not claim these behaviours were tested in a browser. Clearly distinguish code inspection from runtime testing.
+DELIVERABLE
+Apply these changes to the latest version of index.html in this session.
+Return the complete updated HTML file as a downloadable artifact, not just snippets, a patch, or instructions for manual editing. Do not omit existing code or replace it with placeholders.
+Alongside the file, provide a concise change report explaining:
+What was fixed in the segmented progress indicator.
+What changed in the audio routing and mute behaviour.
+Which slide-by-slide scientific corrections were made.
+What tests were actually performed.
+Any remaining limitations that could not be verified.
+Do not report a fix as successful merely because the code has been edited. Prioritise functional correctness, credible content, and preservation of the original design.
